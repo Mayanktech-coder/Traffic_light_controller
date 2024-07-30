@@ -1,95 +1,89 @@
-`timescale 1ns / 1ps
+ `timescale 1ns / 1ps
 
-module traffic_light_controler(
-input clk, rst, pedestrian_btn,
-output reg red, yellow, green, walk_light, stop_light
-    );
-//Definition of States
-    parameter RED_light = 2'b00;
-    parameter Yellow_light = 2'b01;
-    parameter Green_light = 2'b10;
-    parameter Pedestrian_Crossing = 2'b11;
-    
-reg [1:0] next_state, present_state;
-reg pedestrian_RED, pedestrian_Yellow, pedestrian_Green;
+module tlc(
+    input clk, rst, x, pb,
+    output reg [1:0] highway, country,
+    output reg pedestrian_light
+);
+integer timer = 3;
+reg [1:0] state, next_state;
+reg [1:0] counter_s1, counter_s2, counter_s3; // Counters for each state
+parameter HW_red = 2'b00, HW_yellow = 2'b01, HW_green = 2'b10;
+parameter CR_red = 2'b00, CR_yellow = 2'b01, CR_green = 2'b10;
+parameter s0 = 2'b00, s1 = 2'b01, s2 = 2'b10, s3 = 2'b11;
+parameter walk = 1'b1, stop = 1'b0;
 
-//Initial values of States
+// Initialization
 initial begin
-red <= 1'b0;
-green <= 1'b0;
-yellow <= 1'b0;
-walk_light <= 1'b0;
-stop_light <= 1'b0;
-end
- //Initial Conditions
-always @(posedge clk )
-begin
-if (rst) present_state <= RED_light;
-else present_state <= next_state;
+    state <= s0;
+    highway <= HW_green;
+    country <= CR_red;
+    end
+
+//Reset Condition & Counter Increment
+always @(posedge clk) begin
+    if (rst) begin
+        state <= s0;
+        counter_s1 <= 0;
+        counter_s2 <= 0;
+        counter_s3 <= 0;
+    end
+    else begin
+        state <= next_state;
+        // Increment counters based on state
+        case(state)
+            s1: counter_s1 <= (counter_s1 == timer) ? 0 : counter_s1 + 1;
+            s2: counter_s2 <= (counter_s2 == timer) ? 0 : counter_s2 + 1;
+            s3: counter_s3 <= (counter_s3 == timer) ? 0 : counter_s3 + 1;
+            default: begin
+                counter_s1 <= 0;
+                counter_s2 <= 0;
+                counter_s3 <= 0;
+            end
+        endcase
+    end
 end
 
 //Transition Logic
-always @(present_state) begin
-    case(present_state)
-        RED_light: begin
-            pedestrian_RED <= pedestrian_btn;
-            next_state <= Yellow_light;
-            end
-        Yellow_light: begin
-             pedestrian_Yellow <= pedestrian_btn;
-             next_state <= Green_light;
-            end
-        Green_light: begin
-            pedestrian_Green = pedestrian_btn;
-            if(pedestrian_RED || pedestrian_Yellow || pedestrian_Green) 
-                begin 
-                next_state = Pedestrian_Crossing; 
-                end
-            else next_state <= RED_light; end
-        Pedestrian_Crossing: next_state <= RED_light;
-        default:next_state = RED_light;
+always @(*) begin
+    case(state)
+        s0: next_state = (x || pb) ? s1 : s0;
+        s1: next_state = (counter_s1 == timer) ? s2 : s1;
+        s2: next_state = ((counter_s2 == timer) && !(x || pb)) ? s3 : s2;
+        s3: next_state = (counter_s3 == timer) ? s0 : s3;
+        default: next_state = s0;
     endcase
 end
 
 //Output Logic
-always @(present_state) begin
-case(present_state) 
-    RED_light:begin 
-        red <= 1'b1;
-        yellow <= 1'b0;
-        green <= 1'b0; 
-        walk_light <= 1'b0;
-        stop_light <= 1'b1;
+always @(*) begin
+    case(state)
+        s0: begin
+            highway = HW_green;
+            country = CR_red;
+            pedestrian_light = stop;
         end
-    Yellow_light:begin 
-        red <= 1'b0;
-        yellow <= 1'b1;
-        green <= 1'b0; 
-        walk_light <= 1'b0;
-        stop_light <= 1'b1;
+        s1: begin
+            highway = HW_yellow;
+            country = CR_red;
+            pedestrian_light = stop;
         end
-    Green_light:begin 
-        red <= 1'b0;
-        yellow <= 1'b0;
-        green <= 1'b1; 
-        walk_light <= 1'b0;
-        stop_light <= 1'b1;
+        s2: begin
+            highway = HW_red;
+            country = CR_green;
+            pedestrian_light = walk;
         end
-    Pedestrian_Crossing: begin
-        red <= 1'b1;
-        yellow <= 1'b0;
-        green <= 1'b0;
-        walk_light <= 1'b1;
-        stop_light <= 1'b0;
+        s3: begin
+            highway = HW_red;
+            country = CR_yellow;
+            pedestrian_light = stop;
         end
-    default:begin 
-        red <= 1'b1;
-        yellow <= 1'b0;
-        green <= 1'b0; 
-        walk_light <= 1'b0;
-        stop_light <= 1'b1;
+        default: begin
+            highway = HW_green;
+            country = CR_red;
+            pedestrian_light = stop;
         end
- endcase
+    endcase
 end
 
 endmodule
